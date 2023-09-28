@@ -8,4 +8,9 @@ export interface PhotoContextType {
   nextId: () => number;
 }
 
-export default createContext<PhotoContextType>(undefined as unknown as PhotoContextType);
+export default createContext<PhotoContextType>({
+  nextId: () => 1,
+  update: () => undefined,
+  remove: () => undefined,
+  show: () => undefined
+} as unknown as PhotoContextType);

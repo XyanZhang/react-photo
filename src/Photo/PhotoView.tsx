@@ -2,7 +2,7 @@ import { Children, cloneElement, useContext, useEffect, useMemo, useRef } from "
 import useInitial from "../hooks/useInitial";
 import useMethods from "../hooks/useMethods";
 import { PhotoRenderParams } from "../utis/type";
-import PhotoContext from './photo.context'
+import PhotoContext, { PhotoContextType } from './photo.context'
 
 type TriggerType = ('onClick' | 'onDoubleClick')[];
 
@@ -25,7 +25,7 @@ const PhotoView: React.FC<PhotoViewProps> = ({
   triggers = ['onClick'],
   children
 }) => {
-  const photoContext = useContext(PhotoContext)
+  const photoContext =  useContext<PhotoContextType>(PhotoContext);
   const key = useInitial(() => photoContext.nextId()); // 保存nextId获取 
   const originRef = useRef<HTMLElement>(null);
 
