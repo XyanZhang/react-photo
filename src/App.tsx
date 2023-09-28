@@ -1,15 +1,18 @@
 import React from 'react';
 import './App.css';
 import Photo from './Photo/Photo';
+import PhotoProvider from './Photo/PhotoProvider';
 import PhotoView from './Photo/PhotoView';
 
 function App() {
   const imgUrl = '/logo192.png'
   return (
     <div className="App">
+    <PhotoProvider>
       <PhotoView src={imgUrl}>
         <img src={imgUrl} alt="" />
       </PhotoView>
+    </PhotoProvider>
       <Photo
         src={imgUrl}
         loaded={true}
