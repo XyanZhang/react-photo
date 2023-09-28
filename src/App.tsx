@@ -1,5 +1,6 @@
 import React from 'react';
 import './App.css';
+import Photo from './Photo/Photo';
 import PhotoView from './Photo/PhotoView';
 
 function App() {
@@ -9,6 +10,12 @@ function App() {
       <PhotoView src={imgUrl}>
         <img src={imgUrl} alt="" />
       </PhotoView>
+      <Photo
+        src={imgUrl}
+        loaded={true}
+        broken={false}
+        onPhotoLoad={() => {}}
+      ></Photo>
     </div>
   );
 }
