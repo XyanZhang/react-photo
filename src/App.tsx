@@ -9,7 +9,10 @@ function App() {
   return (
     <div className="App">
     <PhotoProvider>
-      <PhotoView src={imgUrl}>
+      <PhotoView key={1} src={imgUrl}>
+        <img src={imgUrl} alt="" />
+      </PhotoView>
+      <PhotoView key={2} src={imgUrl}>
         <img src={imgUrl} alt="" />
       </PhotoView>
     </PhotoProvider>

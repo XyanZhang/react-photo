@@ -1,9 +1,19 @@
-import PreventScroll from "../components/PreventScroll";
-import SlidePortal from "../components/SlidePortal";
-import useAnimationVisible from "../hooks/useAnimationVisible";
-import useSetState from "../hooks/useSetState";
-import { DataType, PhotoProviderBase } from "../utis/type";
-import { defaultOpacity } from "../utis/variables";
+import { useRef, useState } from 'react';
+import CloseIcon from '../components/CloseIcon';
+import PreventScroll from '../components/PreventScroll';
+import SlidePortal from '../components/SlidePortal';
+import useAdjacentImages from '../hooks/useAdjacentImages';
+import useAnimationVisible from '../hooks/useAnimationVisible';
+import useEventListener from '../hooks/useEventListener';
+import useMethods from '../hooks/useMethods';
+import useSetState from '../hooks/useSetState';
+import { limitNumber } from '../utis/limitTarget';
+import { DataType, OverlayRenderProps, PhotoProviderBase, ReachType } from '../utis/type';
+import { defaultEasing, defaultOpacity, defaultSpeed, horizontalOffset, maxMoveOffset } from '../utis/variables';
+
+import './PhotoSlider.less';
+
+let innerWidth = window.innerWidth;
 
 type PhotoSliderState = {
   // 偏移量
@@ -65,15 +75,33 @@ export interface IPhotoSliderProps extends PhotoProviderBase {
 
 export default function PhotoSlider(props: IPhotoSliderProps) {
   const {
-    className,
+    loop = 3,
+    speed: speedFn,
+    easing: easingFn,
+    photoClosable,
+    maskClosable = true,
     maskOpacity = defaultOpacity,
-    portalContainer,
+    pullClosable = true,
+    bannerVisible = true,
+    overlayRender,
+    toolbarRender,
+    className,
+    maskClassName,
+    photoClassName,
+    photoWrapClassName,
+    loadingElement,
+    brokenElement,
+    images,
+    index: controlledIndex = 0,
+    onIndexChange: controlledIndexChange,
     visible,
     onClose,
     afterClose,
+    portalContainer,
   } = props;
   const [state, updateState] = useSetState(initialState);
-  
+  const [innerIndex, updateInnerIndex] = useState(0);
+
   const {
     x,
     touched,
@@ -92,23 +120,272 @@ export default function PhotoSlider(props: IPhotoSliderProps) {
     onScale,
     onRotate,
   } = state;
+
+  // 受控 index
+  const isControlled = props.hasOwnProperty('index');
+  const index = isControlled ? controlledIndex : innerIndex;
+  const onIndexChange = isControlled ? controlledIndexChange : updateInnerIndex;
+  // 内部虚拟 index
+  const virtualIndexRef = useRef(index);
+  // 当前图片
+  const imageLength = images.length;
+  const currentImage: DataType | undefined = images[index];
+
+  // 是否开启
+  // noinspection SuspiciousTypeOfGuard
+  const enableLoop = typeof loop === 'boolean' ? loop : imageLength > loop;
+  
+  // 截取相邻的图片
+  const adjacentImages = useAdjacentImages(images, index, enableLoop);
+
   // 显示动画处理
-  const [realVisible, activeAnimation, onAnimationEnd] = useAnimationVisible(visible, afterClose);
+  const [realVisible, activeAnimation, onAnimationEnd] = useAnimationVisible(
+    visible,
+    afterClose
+  );
+  const { close, changeIndex } = useMethods({
+    close(evt?: React.MouseEvent | React.TouchEvent) {
+      if (onRotate) {
+        onRotate(0);
+      }
+      updateState({
+        overlay: true,
+        // 记录当前关闭时的透明度
+        lastBg: bg,
+      });
+      onClose(evt);
+    },
+    changeIndex(nextIndex: number, isPause: boolean = false) {
+      // 当前索引
+      const currentIndex = enableLoop
+        ? virtualIndexRef.current + (nextIndex - index)
+        : nextIndex;
+      const max = imageLength - 1;
+      // 虚拟 index
+      // 非循环模式，限制区间
+      const limitIndex = limitNumber(currentIndex, 0, max);
+      const nextVirtualIndex = enableLoop ? currentIndex : limitIndex;
+      // 单个屏幕宽度
+      const singlePageWidth = innerWidth + horizontalOffset;
 
+      updateState({
+        touched: false,
+        lastCX: undefined,
+        lastCY: undefined,
+        x: -singlePageWidth * nextVirtualIndex,
+        pause: isPause,
+      });
 
+      virtualIndexRef.current = nextVirtualIndex;
+      // 更新真实的 index
+      const realLoopIndex =
+        nextIndex < 0 ? max : nextIndex > max ? 0 : nextIndex;
+      if (onIndexChange) {
+        onIndexChange(enableLoop ? realLoopIndex : limitIndex);
+      }
+    },
+  });
+
+  useEventListener('keydown', (evt: KeyboardEvent) => {
+    if (visible) {
+      switch (evt.key) {
+        case 'ArrowLeft':
+          changeIndex(index - 1, true);
+          break;
+        case 'ArrowRight':
+          changeIndex(index + 1, true);
+          break;
+        case 'Escape':
+          close();
+          break;
+      }
+    }
+  });
+
+  function handlePhotoTap(closeable: boolean | undefined) {
+    return closeable ? close() : updateState({ overlay: !overlay });
+  }
+
+  function handleResize() {
+    updateState({
+      x: -(innerWidth + horizontalOffset) * index,
+      lastCX: undefined,
+      lastCY: undefined,
+      pause: true,
+    });
+    virtualIndexRef.current = index;
+  }
+
+  function handleReachVerticalMove(clientY: number, nextScale?: number) {
+    if (lastCY === undefined) {
+      updateState({
+        touched: true,
+        lastCY: clientY,
+        bg,
+        minimal: true,
+      });
+      return;
+    }
+    const opacity =
+      maskOpacity === null ? null : limitNumber(maskOpacity, 0.01, maskOpacity - Math.abs(clientY - lastCY) / 100 / 4);
+
+    updateState({
+      touched: true,
+      lastCY,
+      bg: nextScale === 1 ? opacity : maskOpacity,
+      minimal: nextScale === 1,
+    });
+  }
+
+  function handleReachHorizontalMove(clientX: number) {
+    if (lastCX === undefined) {
+      updateState({
+        touched: true,
+        lastCX: clientX,
+        x,
+        pause: false,
+      });
+      return;
+    }
+    const originOffsetClientX = clientX - lastCX;
+    let offsetClientX = originOffsetClientX;
+
+    // 第一张和最后一张超出距离减半
+    if (
+      !enableLoop &&
+      ((index === 0 && originOffsetClientX > 0) || (index === imageLength - 1 && originOffsetClientX < 0))
+    ) {
+      offsetClientX = originOffsetClientX / 2;
+    }
+
+    updateState({
+      touched: true,
+      lastCX: lastCX,
+      x: -(innerWidth + horizontalOffset) * virtualIndexRef.current + offsetClientX,
+      pause: false,
+    });
+  }
+
+  function handleReachMove(reachPosition: ReachType, clientX: number, clientY: number, nextScale?: number) {
+    if (reachPosition === 'x') {
+      handleReachHorizontalMove(clientX);
+    } else if (reachPosition === 'y') {
+      handleReachVerticalMove(clientY, nextScale);
+    }
+  }
+
+  function handleReachUp(clientX: number, clientY: number) {
+    const offsetClientX = clientX - (lastCX ?? clientX);
+    const offsetClientY = clientY - (lastCY ?? clientY);
+    let willClose = false;
+    // 下一张
+    if (offsetClientX < -maxMoveOffset) {
+      changeIndex(index + 1);
+      return;
+    }
+    // 上一张
+    if (offsetClientX > maxMoveOffset) {
+      changeIndex(index - 1);
+      return;
+    }
+    const singlePageWidth = innerWidth + horizontalOffset;
+    // 当前偏移
+    const currentTranslateX = -singlePageWidth * virtualIndexRef.current;
+
+    if (Math.abs(offsetClientY) > 100 && minimal && pullClosable) {
+      willClose = true;
+      close();
+    }
+    updateState({
+      touched: false,
+      x: currentTranslateX,
+      lastCX: undefined,
+      lastCY: undefined,
+      bg: maskOpacity,
+      overlay: willClose ? true : overlay,
+    });
+  }
+
+  if (!realVisible) {
+    return null;
+  }
+  
   const currentOverlayVisible = overlay && !activeAnimation;
-
+  // 关闭过程中使用下拉保存的透明度
+  const currentOpacity = visible ? bg : lastBg;
+  // 覆盖物参数
+  const overlayParams: OverlayRenderProps | undefined = onScale &&
+    onRotate && {
+      images,
+      index,
+      visible,
+      onClose: close,
+      onIndexChange: changeIndex,
+      overlayVisible: currentOverlayVisible,
+      overlay: currentImage && currentImage.overlay,
+      scale,
+      rotate,
+      onScale,
+      onRotate,
+    };
+  // 动画时间
+  const currentSpeed = speedFn ? speedFn(activeAnimation) : defaultSpeed;
+  const currentEasing = easingFn ? easingFn(activeAnimation) : defaultEasing;
+  const slideSpeed = speedFn ? speedFn(3) : defaultSpeed + 200;
+  const slideEasing = easingFn ? easingFn(3) : defaultEasing;
+  
   return (
     <SlidePortal
-      className={`PhotoView-Portal${!currentOverlayVisible ? ' PhotoView-Slider__clean' : ''}${
-        !visible ? ' PhotoView-Slider__willClose' : ''
-      }${className ? ` ${className}` : ''}`}
+      className={`PhotoView-Portal${
+        !currentOverlayVisible ? ' PhotoView-Slider__clean' : ''
+      }${!visible ? ' PhotoView-Slider__willClose' : ''}${
+        className ? ` ${className}` : ''
+      }`}
       role="dialog"
       onClick={(e) => e.stopPropagation()}
       container={portalContainer}
     >
       {visible && <PreventScroll />}
+      <div
+        className={`PhotoView-Slider__Backdrop${
+          maskClassName ? ` ${maskClassName}` : ''
+        }${
+          activeAnimation === 1
+            ? ' PhotoView-Slider__fadeIn'
+            : activeAnimation === 2
+            ? ' PhotoView-Slider__fadeOut'
+            : ''
+        }`}
+        style={{
+          background: currentOpacity
+            ? `rgba(0, 0, 0, ${currentOpacity})`
+            : undefined,
+          transitionTimingFunction: currentEasing,
+          transitionDuration: `${touched ? 0 : currentSpeed}ms`,
+          animationDuration: `${currentSpeed}ms`,
+        }}
+        onAnimationEnd={onAnimationEnd}
+      />
+      {bannerVisible && (
+        <div className="PhotoView-Slider__BannerWrap">
+          <div className="PhotoView-Slider__Counter">
+            {index + 1} / {imageLength}
+          </div>
+          <div className="PhotoView-Slider__BannerRight">
+            {toolbarRender && overlayParams && toolbarRender(overlayParams)}
+            <CloseIcon className="PhotoView-Slider__toolbarIcon" onClick={close} />
+          </div>
+        </div>
+      )}
+      {adjacentImages.map((item: DataType, currentIndex) => {
+        // 截取之前的索引位置
+        const nextIndex =
+          !enableLoop && index === 0 ? index + currentIndex : virtualIndexRef.current - 1 + currentIndex;
+
+        return (
+          <></>
+        );
+      })}
     </SlidePortal>
-    
-  )
+  );
 }

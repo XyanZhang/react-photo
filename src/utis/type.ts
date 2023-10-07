@@ -1,5 +1,8 @@
 import type React from 'react';
 
+/**
+ * 资源数据类型
+ */
 export interface DataType {
   /**
    * 唯一标识
@@ -98,14 +101,6 @@ export interface PhotoProviderBase {
   portalContainer?: HTMLElement;
 }
 
-/**
- * brokenElement 函数参数
- */
-export interface BrokenElementParams {
-  src: string;
-}
-
-
 export type PhotoRenderParams = {
   /**
    * 自定义渲染 DOM 属性
@@ -114,6 +109,13 @@ export type PhotoRenderParams = {
   scale: number;
   rotate: number;
 };
+
+/**
+ * brokenElement 函数参数
+ */
+export interface BrokenElementParams {
+  src: string;
+}
 
 export interface OverlayRenderProps {
   /**
@@ -161,6 +163,80 @@ export interface OverlayRenderProps {
    */
   onScale: (scale: number) => void;
 }
+
+export interface ExposedProperties {
+  // 缩放
+  scale?: number;
+  // 旋转
+  rotate?: number;
+  // 缩放回调
+  onScale?: (scale: number) => void;
+  // 旋转回调
+  onRotate?: (rotate: number) => void;
+}
+
+export type ReachMoveFunction = (reachPosition: ReachType, clientX: number, clientY: number, scale?: number) => void;
+
+export type ReachFunction = (clientX: number, clientY: number) => void;
+
+export type PhotoTapFunction = (clientX: number, clientY: number) => void;
+
+/**
+ * 边缘超出状态
+ */
+export type CloseEdgeType =
+  | 1 // 小于屏幕宽度
+  | 2 // 抵触左边/上边
+  | 3 // 抵触右边/下边
+  | undefined; // 正常滑动
+
+/**
+ * 边缘触发状态
+ */
+export type ReachType =
+  | 'x' // x 轴
+  | 'y' // y 轴
+  | undefined; // 未触发
+
+/**
+ * 初始响应状态
+ */
+export type TouchStartType =
+  | 0 // 未触发
+  | 1 // X 轴优先
+  | 2 // Y 轴往上 push
+  | 3; // Y 轴往下 pull
+
+export type OriginRectType = {
+  // top
+  T: number;
+  // left
+  L: number;
+  // width
+  W: number;
+  // height
+  H: number;
+  // object-fit
+  FIT: 'contain' | 'cover' | 'fill' | undefined;
+};
+
+/**
+ * 动画状态
+ */
+export type EasingMode =
+  // 未初始化
+  | 0
+  // 进入：开始
+  | 1
+  // 进入：动画开始
+  | 2
+  // 进入：动画第二帧
+  | 3
+  // 正常
+  | 4
+  // 关闭
+  | 5;
+
 /**
  * 进行中的动画
  */
