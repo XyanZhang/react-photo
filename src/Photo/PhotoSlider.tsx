@@ -1,3 +1,4 @@
+import PreventScroll from "../components/PreventScroll";
 import SlidePortal from "../components/SlidePortal";
 import useAnimationVisible from "../hooks/useAnimationVisible";
 import useSetState from "../hooks/useSetState";
@@ -106,6 +107,7 @@ export default function PhotoSlider(props: IPhotoSliderProps) {
       onClick={(e) => e.stopPropagation()}
       container={portalContainer}
     >
+      {visible && <PreventScroll />}
     </SlidePortal>
     
   )
