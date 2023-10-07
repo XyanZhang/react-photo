@@ -3,6 +3,7 @@ import useMethods from "../hooks/useMethods";
 import useSetState from "../hooks/useSetState";
 import { DataType, PhotoProviderBase } from "../utis/type";
 import PhotoContext from "./photo.context";
+import PhotoSlider from "./PhotoSlider";
 
 
 type PhotoProviderState = {
@@ -97,6 +98,14 @@ export default function PhotoProvider({
   return (
     <PhotoContext.Provider value={value}>
       {children}
+      <PhotoSlider
+        images={images}
+        visible={visible}
+        index={index}
+        onIndexChange={fn.changeIndex}
+        onClose={fn.close}
+        {...restProps}
+      />
     </PhotoContext.Provider>
   )
 }
